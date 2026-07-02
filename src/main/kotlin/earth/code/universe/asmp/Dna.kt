@@ -1,11 +1,14 @@
 package earth.code.universe.asmp
 
 import com.mojang.brigadier.arguments.IntegerArgumentType
+import earth.code.universe.asmp.Event.Companion.validateAdvancements
 import io.github.apace100.origins.origin.OriginLayers
 import io.github.apace100.origins.registry.ModComponents
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper
 import net.minecraft.commands.Commands.argument
 import net.minecraft.commands.Commands.literal
 import net.minecraft.commands.arguments.EntityArgument
@@ -14,6 +17,7 @@ import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.server.packs.PackType
 import net.minecraft.world.InteractionHand
 import net.minecraft.world.InteractionResultHolder
 import net.minecraft.world.entity.item.ItemEntity
@@ -38,6 +42,14 @@ class Dna : ModInitializer {
     }
 
     override fun onInitialize() {
+        ResourceManagerHelper.get(PackType.SERVER_DATA)
+            .registerReloadListener(Event.Companion.EventDataLoader.INSTANCE)
+
+        ServerLifecycleEvents.SERVER_STARTED.register { server ->
+            validateAdvancements(server)
+        }
+
+        Event.init()
         ModEvents.init()
         ModItems.init()
         println("ASMP DNA System Initialized")
@@ -407,7 +419,6 @@ class Dna : ModInitializer {
     }
     companion object {
         fun onScoreChange(player: ServerPlayer) {
-            val logger = LoggerFactory.getLogger("asmp_dna")
             var dna = 0
 
             val scoreboard = player.server!!.scoreboard

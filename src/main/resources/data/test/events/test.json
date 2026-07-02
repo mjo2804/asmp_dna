@@ -1,0 +1,20 @@
+{
+  "name": "Test Event",
+  "challs": [
+    {
+      "type": "item",
+      "item": "minecraft:dirt",
+      "points": 1
+    },
+    {
+      "type": "achievement",
+      "achievement": "minecraft:story/root",
+      "points": 2
+    },
+    {
+      "type": "entity_kill",
+      "entity_type": "minecraft:zombie",
+      "points": 3
+    }
+  ]
+}
