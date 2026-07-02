@@ -19,7 +19,7 @@
 ## Events:
 Disclaimer: Advancements are WIP and do not work yet!
 Data Driven Events which are defined in data/namespace/events/file.json and can be reffered to in-game with the identifier namespace:file.
-An example implementing all three challange types is below, it can also be found here: https://github.com/FLDebug10/asmp_dna/blob/master/src/main/resources/data/test/events/test.json
+An example implementing all three challange types is below, it can also be found here: https://github.com/FLDebug10/asmp_dna/blob/master/src/main/resources/data/test/events/test.json.
 You can use the /event parse command to check if your datapack is being parsed correctly, you should also check your logs if it doesn't becuase it should warn if an identifier (for items, entity types or advancements) can't be found.
 
 ```json
