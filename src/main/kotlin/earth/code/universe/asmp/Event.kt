@@ -27,6 +27,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener
 import net.minecraft.ChatFormatting
+import net.minecraft.advancements.Advancement
 import net.minecraft.server.packs.resources.ResourceManager
 import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener
 import net.minecraft.util.profiling.ProfilerFiller
@@ -35,6 +36,7 @@ import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.TextColor
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.InteractionHand
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.scores.criteria.ObjectiveCriteria
 import kotlin.String
 import kotlin.collections.Map
@@ -44,38 +46,36 @@ class Event {
         private const val KEY = "asmp_event"
         fun init() {
             ServerLivingEntityEvents.AFTER_DEATH.register { entity, damageSource ->
-                val logger = LoggerFactory.getLogger("asmp_dna")
+                val killer = damageSource.entity ?: return@register
 
-                val killer = damageSource.entity
+                if (killer is Player) {
+                    val server = killer.server ?: return@register
 
-                if (killer is ServerPlayer) {
-                    val id = loadPersistentData(entity.server!!).getOrDefault(PersistentData()).activeEvent
+                    val id = loadPersistentData(server).getOrDefault(PersistentData()).activeEvent
 
-                    val entityTypes = loadData().associateBy { it.id }.toMutableMap()[id]!!.toParsedData().killEntity
+                    val event = loadData().associateBy { it.id }[id] ?: return@register
+                    val entityTypes = event.toParsedData().killEntity
                     val entityId = BuiltInRegistries.ENTITY_TYPE.getKey(entity.type)
                     val points = entityTypes[entityId]
 
-                    logger.warn(entityId.toString() + points + entityTypes)
-
-                    val score = entity.server!!.scoreboard
+                    val score = server.scoreboard
 
                     if (points != null) {
-                        val pointsScore = score.getObjective("event")!!
+                        val pointsScore = score.getObjective("event") ?: return@register
                         pointsScore.scoreboard.getOrCreatePlayerScore(killer.scoreboardName, pointsScore).score += points
                     }
                 }
             }
 
-            var last = 0L
-
             ServerTickEvents.END_SERVER_TICK.register serverTickEvents@{ server ->
-                val now = server.tickCount.toLong()
+                val now = server.tickCount
 
-                if (now - last >= 20) {
-                    last = now
+                if (now % 20 == 0) {
                     if (Instant.now() >= loadPersistentData(server).getOrDefault(PersistentData()).time) {
                         val score = server.scoreboard
+
                         val event = score.getObjective("event") ?: return@serverTickEvents
+
                         val scores = event.scoreboard.trackedPlayers
                             .mapNotNull { name ->
                                 val score = event.scoreboard.getOrCreatePlayerScore(name, event)
@@ -287,10 +287,10 @@ class Event {
                                             source.sendSystemMessage(
                                                 Component.literal(
                                                     """Event Name: ${currentEvent.name}
-                                    |Challenge(s): 
-                                    |$challengeText
-                                    |
-                                """.trimMargin()
+                                                                |Challenge(s): 
+                                                                |$challengeText
+                                                                |
+                                                            """.trimMargin()
                                                 )
                                             )
 
@@ -470,7 +470,7 @@ class Event {
             var points: Int
         ) : Challenge
 
-        public fun validateAdvancements(server: MinecraftServer) {
+        fun validateAdvancements(server: MinecraftServer) {
             val advancementManager = server.advancements
 
             for (event in EventDataLoader.INSTANCE.data.values) {
@@ -607,5 +607,23 @@ class Event {
         }
 
 
+    }
+
+    object EventHandler {
+        @JvmStatic
+        fun onAdvancement(player: ServerPlayer, advancement: Advancement) {
+            val id = loadPersistentData(player.server).getOrDefault(PersistentData()).activeEvent
+
+            val achievements = loadData().associateBy { it.id }.toMutableMap()[id]!!.toParsedData().achievements
+            val achievement = advancement.id
+            val points = achievements[achievement]
+
+            val score = player.server.scoreboard
+
+            if (points != null) {
+                val pointsScore = score.getObjective("event")!!
+                pointsScore.scoreboard.getOrCreatePlayerScore(player.scoreboardName, pointsScore).score += points
+            }
+        }
     }
 }
