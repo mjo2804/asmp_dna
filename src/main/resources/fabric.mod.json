@@ -20,5 +20,8 @@
     "fabric-api": "*",
     "minecraft": "${minecraft_version}",
     "origins": ">=1.10.2+mc.1.20.1"
-  }
+  },
+  "mixins": [
+    "asmp_dna.mixins.json"
+  ]
 }
