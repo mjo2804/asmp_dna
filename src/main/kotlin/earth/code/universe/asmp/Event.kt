@@ -68,53 +68,64 @@ class Event {
             }
 
             ServerTickEvents.END_SERVER_TICK.register serverTickEvents@{ server ->
-                val now = server.tickCount
+                if (server.tickCount % 20 != 0) return@serverTickEvents
 
-                if (now % 20 == 0) {
-                    if (Instant.now() >= loadPersistentData(server).getOrDefault(PersistentData()).time) {
-                        val score = server.scoreboard
 
-                        val event = score.getObjective("event") ?: return@serverTickEvents
+                val data = loadPersistentData(server).getOrDefault(PersistentData())
+                if (Instant.now() < data.time) return@serverTickEvents
 
-                        val scores = event.scoreboard.trackedPlayers
-                            .mapNotNull { name ->
-                                val score = event.scoreboard.getOrCreatePlayerScore(name, event)
-                                if (score.isLocked) null else name to score.score
-                            }
-                            .sortedByDescending { it.second }
-                            .take(3)
+                val scoreboard = server.scoreboard
 
-                        scores.forEachIndexed { index, pair ->
-                            var dna = 0
+                val event = scoreboard.getObjective("event") ?: return@serverTickEvents
 
-                            when (index) {
-                                1 -> {
-                                    dna = 2
-                                }
+                val dnaObjective = scoreboard.getObjective("dna") ?: return@serverTickEvents
 
-                                2, 3 -> {
-                                    dna = 1
-                                }
-                            }
-
-                            val dnaScore = score.getObjective("dna")!!
-                            dnaScore.scoreboard.getOrCreatePlayerScore(pair.first, dnaScore).score += dna
-
-                            if (server.playerList.getPlayerByName(pair.first) == null) {
-                                val data = loadPersistentData(server).getOrDefault(PersistentData())
-                                data.delayedChanges[pair.first] = dna
-                                savePersistentData(server, data)
-
-                                return@forEachIndexed
-                            }
-
-                            Dna.onScoreChange(server.playerList.getPlayerByName(pair.first)!!)
-                        }
-
-                        score.removeObjective(event)
-
-                        savePersistentData(server, PersistentData(delayedChanges = loadPersistentData(server).getOrDefault(PersistentData()).delayedChanges))
+                val scores = scoreboard.getPlayerScores(event)
+                    .map { score ->
+                        score.owner to score.score
                     }
+                    .sortedByDescending { it.second }
+                    .take(3)
+
+                scores.forEachIndexed { index, (holder, points) ->
+                    val dna = when (index) {
+                        0 -> 2
+                        1, 2 -> 1
+                        else -> 0
+                    }
+
+                    scoreboard.getOrCreatePlayerScore(holder, dnaObjective).score += dna
+
+                    val player = server.playerList.getPlayerByName(holder)
+                    if (player != null) {
+                        Dna.onScoreChange(player)
+                    } else {
+                        data.delayedChanges.merge(holder, dna, Int::plus)
+                    }
+
+                    data.activeEvent = ResourceLocation("")
+                    data.time = Instant.now()
+                }
+
+                scoreboard.removeObjective(event)
+                savePersistentData(server, data)
+
+                fun place(i: Int, reward: Int): String =
+                    scores.getOrNull(i)?.let { (holder, points) ->
+                        "${i + 1}st Place: $holder ($reward DNA) - $points Points"
+                    } ?: "${i + 1}st Place: None"
+
+                val msg = Component.literal(
+                    """The Event has concluded. The winners are:
+                        |${place(0, 2)}
+                        |${place(1, 1)}
+                        |${place(2, 1)}
+                        |
+                        """.trimMargin()
+                )
+
+                server.playerList.players.forEach {
+                    it.sendSystemMessage(msg)
                 }
             }
 
@@ -126,10 +137,12 @@ class Event {
                     val score = server.scoreboard
                     val dnaScore = score.getObjective("dna")!!
                     dnaScore.scoreboard.getOrCreatePlayerScore(player.scoreboardName, dnaScore).score += data.delayedChanges[player.scoreboardName]!!
+
+                    player.sendSystemMessage(Component.literal("The Event has concluded. You have gotten ${data.delayedChanges[player.scoreboardName]!!} DNA Points as a Reward!"))
                 }
             }
 
-            CommandRegistrationCallback.EVENT.register { dispatcher, registryAccess, env ->
+            CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
                 dispatcher.register(
                     literal("event")
                         .then(
@@ -150,7 +163,7 @@ class Event {
                                                 source.server,
                                                 PersistentData(
                                                     activeEvent = id,
-                                                    time = Instant.now().plusSeconds(24 * 60 * 60)
+                                                    time = Instant.now().plusSeconds(24*60*60)
                                                 )
                                             )
 
@@ -241,6 +254,8 @@ class Event {
                                     val points = items[itemId]
 
                                     if (points != null) {
+                                        val name = heldItemStack.hoverName.string
+
                                         val count = heldItemStack.count
 
                                         val totalPoints = points * count
@@ -252,7 +267,7 @@ class Event {
                                         val pointsScore = score.getObjective("event")!!
                                         pointsScore.scoreboard.getOrCreatePlayerScore(player.scoreboardName, pointsScore).score += totalPoints
 
-                                        source.sendSystemMessage(Component.literal("Sacrificed $count ${heldItemStack.hoverName.string} for $totalPoints Points."))
+                                        source.sendSystemMessage(Component.literal("Sacrificed $count $name for $totalPoints Points."))
                                     }
                                     else {
                                         source.sendSystemMessage(Component.literal("This item can't be sacrificed for the current event!"))
