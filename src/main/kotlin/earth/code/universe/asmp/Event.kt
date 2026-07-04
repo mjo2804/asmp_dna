@@ -139,6 +139,10 @@ class Event {
                     dnaScore.scoreboard.getOrCreatePlayerScore(player.scoreboardName, dnaScore).score += data.delayedChanges[player.scoreboardName]!!
 
                     player.sendSystemMessage(Component.literal("The Event has concluded. You have gotten ${data.delayedChanges[player.scoreboardName]!!} DNA Points as a Reward!"))
+
+                    data.delayedChanges.remove(player.scoreboardName)
+
+                    savePersistentData(server, data)
                 }
             }
 
@@ -629,7 +633,8 @@ class Event {
         fun onAdvancement(player: ServerPlayer, advancement: Advancement) {
             val id = loadPersistentData(player.server).getOrDefault(PersistentData()).activeEvent
 
-            val achievements = loadData().associateBy { it.id }.toMutableMap()[id]!!.toParsedData().achievements
+            val map = loadData().associateBy { it.id }.toMutableMap()[id] ?: return
+            val achievements = map.toParsedData().achievements
             val achievement = advancement.id
             val points = achievements[achievement]
 
