@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component
 import net.minecraft.world.item.ItemStack
 
 class DNACommand {
-    public fun setup() {
+    fun setup() {
         CommandRegistrationCallback.EVENT.register { dispatcher, registryAccess, env ->
             dispatcher.register(
                 literal("dna")

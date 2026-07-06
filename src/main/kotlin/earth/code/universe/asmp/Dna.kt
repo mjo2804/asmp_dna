@@ -1,18 +1,13 @@
 package earth.code.universe.asmp
 
-import com.mojang.brigadier.arguments.IntegerArgumentType
 import earth.code.universe.asmp.Event.Companion.validateAdvancements
 import earth.code.universe.asmp.commands.DNACommand
 import io.github.apace100.origins.origin.OriginLayers
 import io.github.apace100.origins.registry.ModComponents
 import net.fabricmc.api.ModInitializer
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper
-import net.minecraft.commands.Commands.argument
-import net.minecraft.commands.Commands.literal
-import net.minecraft.commands.arguments.EntityArgument
 import net.minecraft.core.Registry
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
@@ -27,7 +22,6 @@ import net.minecraft.world.item.Item
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Rarity
 import net.minecraft.world.level.Level
-import org.slf4j.LoggerFactory
 
 
 class Dna : ModInitializer {
@@ -46,15 +40,13 @@ class Dna : ModInitializer {
         ResourceManagerHelper.get(PackType.SERVER_DATA)
             .registerReloadListener(Event.Companion.EventDataLoader.INSTANCE)
 
-        ServerLifecycleEvents.SERVER_STARTED.register { server ->
-            validateAdvancements(server)
-        }
+        ServerLifecycleEvents.END_DATA_PACK_RELOAD.register { server, _, _ -> validateAdvancements(server) }
 
         Event.init()
         ModEvents.init()
         ModItems.init()
-        println("ASMP DNA System Initialized")
         DNACommand().setup()
+        println("ASMP DNA System Initialized")
 
     }
     class DnaItem(properties: Properties) : Item(properties) {

@@ -22,12 +22,14 @@ import net.minecraft.util.GsonHelper
 import java.lang.reflect.Type
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.mojang.brigadier.suggestion.SuggestionProvider
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.fabricmc.fabric.api.resource.IdentifiableResourceReloadListener
 import net.minecraft.ChatFormatting
 import net.minecraft.advancements.Advancement
+import net.minecraft.commands.CommandSourceStack
 import net.minecraft.server.packs.resources.ResourceManager
 import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener
 import net.minecraft.util.profiling.ProfilerFiller
@@ -146,6 +148,13 @@ class Event {
                 }
             }
 
+            val EVENT_SUGGESTIONS = SuggestionProvider<CommandSourceStack> { _, builder ->
+                loadData().getIdentifierList().forEach {
+                    builder.suggest(it.toString())
+                }
+                builder.buildFuture()
+            }
+
             CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
                 dispatcher.register(
                     literal("event")
@@ -153,6 +162,7 @@ class Event {
                             literal("start").requires { source -> source.hasPermission(2) }
                                 .then(
                                     argument("identifier", ResourceLocationArgument())
+                                        .suggests (EVENT_SUGGESTIONS)
                                         .executes { context ->
                                             val source = context.source
                                             val id = ResourceLocationArgument.getId(context, "identifier")
@@ -186,7 +196,7 @@ class Event {
                                                                 )
                                                             )
                                                             .withStyle {
-                                                                it.withColor(TextColor.fromLegacyFormat(ChatFormatting.LIGHT_PURPLE))
+                                                                it.withColor(TextColor.fromLegacyFormat(ChatFormatting.DARK_PURPLE))
                                                             }
                                                     )
 
@@ -253,7 +263,15 @@ class Event {
 
                                     val id = loadPersistentData(server).getOrDefault(PersistentData()).activeEvent
 
-                                    val items = loadData().associateBy { it.id }.toMutableMap()[id]!!.toParsedData().item
+                                    val items = loadData().associateBy { it.id }.toMutableMap()[id]?.toParsedData()?.item
+
+                                    if (items == null) {
+                                        source.sendSystemMessage(Component.literal("There is no Event active right now! Try again when an Event has started."))
+
+                                        return@executes 0
+                                    }
+
+
                                     val itemId = BuiltInRegistries.ITEM.getKey(heldItemStack.item)
                                     val points = items[itemId]
 
@@ -284,15 +302,16 @@ class Event {
                             literal("parse").requires { source -> source.hasPermission(2) }
                                 .then(
                                     argument("identifier", ResourceLocationArgument())
+                                        .suggests (EVENT_SUGGESTIONS)
                                         .executes { context ->
                                             val source = context.source
                                             val currentRL = ResourceLocationArgument.getId(context, "identifier")
                                             if (currentRL == null) {
-                                                source.sendSystemMessage(Component.literal("Event couldn't be parsed!"))
+                                                source.sendSystemMessage(Component.literal("Missing Identifier!"))
                                                 return@executes 0
                                             }
                                             val currentEvent = loadData().associateBy { it.id }.toMutableMap().getOrElse(currentRL) {
-                                                source.sendSystemMessage(Component.literal("Event couldn't be parsed!"))
+                                                source.sendSystemMessage(Component.literal("Event couldn't be parsed or an invalid Identifier was given!"))
                                                 return@executes 0
                                             }
 
@@ -316,6 +335,24 @@ class Event {
                                             1
                                         }
                                 )
+                        )
+                        .then(
+                            literal("list").requires { source -> source.hasPermission(2) }
+                                .executes { context ->
+                                    val source = context.source
+
+                                    val identifiers = loadData().getIdentifierList().joinToString("\n")
+
+                                    source.sendSystemMessage(
+                                        Component.literal(
+                                            """Loaded Events:
+                                                |$identifiers
+                                                """.trimMargin()
+                                        )
+                                    )
+
+                                    1
+                                }
                         )
                 )
             }
@@ -474,6 +511,16 @@ class Event {
             return data
         }
 
+        fun MutableList<EventData>.getIdentifierList(): MutableList<ResourceLocation> {
+            val ids: MutableList<ResourceLocation> = mutableListOf()
+
+            for (data in this) {
+                ids.add(data.id)
+            }
+
+            return ids
+        }
+
         data class SacrificeChallenge(
             var item: ResourceLocation,
             var points: Int
@@ -493,7 +540,7 @@ class Event {
             val advancementManager = server.advancements
 
             for (event in EventDataLoader.INSTANCE.data.values) {
-                val LOGGER = LoggerFactory.getLogger("ASMPEventDataLoader")
+                val LOGGER = LoggerFactory.getLogger("asmp_dna")
 
                 event.challs.forEachIndexed { index, chall ->
                     if (chall is AchievementChallenge) {
