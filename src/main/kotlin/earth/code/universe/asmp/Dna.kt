@@ -108,7 +108,7 @@ class Dna : ModInitializer {
                         val server = player.createCommandSourceStack().server
 
                         server.scoreboard.getObjective("dna")
-                        server.scoreboard.getOrCreatePlayerScore(player.scoreboardName, objective).add(dna)
+                        server.scoreboard.getOrCreatePlayerScore(player.scoreboardName, objective).add(1)
                         onScoreChange(player as ServerPlayer)
 
                         val item = ItemStack(ModItems.DNA)
